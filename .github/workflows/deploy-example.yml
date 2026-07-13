@@ -27,7 +27,7 @@ jobs:
         working-directory: ./workflows4s-web-ui
 
       - name: Build Docker image locally
-        run: sbt workflows4s-example/docker:publishLocal
+        run: sbt workflows4s-example/Docker/publishLocal
 
       - name: Deploy example project
         run: flyctl deploy --local-only
