@@ -10,7 +10,7 @@ lazy val `workflows4s` = (project in file("."))
       `workflows4s-example`,
       `workflows4s-web-ui`,
       `workflows4s-web-ui-bundle`,
-      `workflows4s-web-api-shared`.js,
+      `workflows4s-web-api-shared`.js(scala3Version),
     ),
     websiteScaladocs                           := {
       val log       = streams.value.log
@@ -36,8 +36,8 @@ lazy val `workflows4s` = (project in file("."))
     `workflows4s-quartz`,
     `workflows4s-web-ui`,
     `workflows4s-web-ui-bundle`,
-    `workflows4s-web-api-shared`.js,
-    `workflows4s-web-api-shared`.jvm,
+    `workflows4s-web-api-shared`.js(scala3Version),
+    `workflows4s-web-api-shared`.jvm(scala3Version),
     `workflows4s-web-api-server`,
   )
 
@@ -125,20 +125,20 @@ lazy val `workflows4s-quartz` = (project in file("workflows4s-quartz"))
   )
   .dependsOn(`workflows4s-core` % "compile->compile;test->test")
 
-lazy val `workflows4s-web-api-shared` = crossProject(JSPlatform, JVMPlatform)
-  .crossType(CrossType.Pure)
-  .in(file("workflows4s-web-api-shared"))
+lazy val `workflows4s-web-api-shared` = (projectMatrix in file("workflows4s-web-api-shared"))
   .settings(commonSettings)
   .settings(
     libraryDependencies ++= Seq(
-      "com.softwaremill.sttp.tapir"   %%% "tapir-core"         % tapirVersion,
-      "com.softwaremill.sttp.tapir"   %%% "tapir-json-circe"   % tapirVersion,
-      "io.circe"                      %%% "circe-core"         % circeVersion,
-      "io.circe"                      %%% "circe-generic"      % circeVersion,
-      "com.softwaremill.sttp.tapir"   %%% "tapir-apispec-docs" % tapirVersion,
-      "com.softwaremill.sttp.apispec" %%% "jsonschema-circe"   % "0.11.10",
+      "com.softwaremill.sttp.tapir"   %% "tapir-core"         % tapirVersion,
+      "com.softwaremill.sttp.tapir"   %% "tapir-json-circe"   % tapirVersion,
+      "io.circe"                      %% "circe-core"         % circeVersion,
+      "io.circe"                      %% "circe-generic"      % circeVersion,
+      "com.softwaremill.sttp.tapir"   %% "tapir-apispec-docs" % tapirVersion,
+      "com.softwaremill.sttp.apispec" %% "jsonschema-circe"   % "0.11.10",
     ),
   )
+  .jvmPlatform(scalaVersions = Seq(scala3Version))
+  .jsPlatform(scalaVersions = Seq(scala3Version))
 
 lazy val `workflows4s-web-api-server` = (project in file("workflows4s-web-api-server"))
   .settings(commonSettings)
@@ -152,7 +152,7 @@ lazy val `workflows4s-web-api-server` = (project in file("workflows4s-web-api-se
   )
   .dependsOn(
     `workflows4s-core`,
-    `workflows4s-web-api-shared`.jvm,
+    `workflows4s-web-api-shared`.jvm(scala3Version),
   )
 
 lazy val `workflows4s-web-ui` = (project in file("workflows4s-web-ui"))
@@ -160,46 +160,53 @@ lazy val `workflows4s-web-ui` = (project in file("workflows4s-web-ui"))
   .settings(commonSettings)
   .settings(
     libraryDependencies ++= Seq(
-      "io.indigoengine"               %%% "tyrian-io"          % "0.14.0",
-      "io.circe"                      %%% "circe-core"         % circeVersion,
-      "io.circe"                      %%% "circe-generic"      % circeVersion,
-      "io.circe"                      %%% "circe-parser"       % circeVersion,
-      "com.softwaremill.sttp.tapir"   %%% "tapir-sttp-client4" % "1.13.25",
-      "com.softwaremill.sttp.client4" %%% "cats"               % "4.0.25",
-      "org.business4s"                %%% "forms4s-jsonschema" % "0.2.0",
-      "org.business4s"                %%% "forms4s-tyrian"     % "0.2.0",
-      "org.business4s"                %%% "forms4s-circe"      % "0.2.0",
+      "io.indigoengine"               %% "tyrian-io"          % "0.14.0",
+      "io.circe"                      %% "circe-core"         % circeVersion,
+      "io.circe"                      %% "circe-generic"      % circeVersion,
+      "io.circe"                      %% "circe-parser"       % circeVersion,
+      "com.softwaremill.sttp.tapir"   %% "tapir-sttp-client4" % "1.13.25",
+      "com.softwaremill.sttp.client4" %% "cats"               % "4.0.25",
+      "org.business4s"                %% "forms4s-jsonschema" % "0.2.0",
+      "org.business4s"                %% "forms4s-tyrian"     % "0.2.0",
+      "org.business4s"                %% "forms4s-circe"      % "0.2.0",
     ),
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
   )
-  .dependsOn(`workflows4s-core`, `workflows4s-web-api-shared`.js)
+  .dependsOn(`workflows4s-core`, `workflows4s-web-api-shared`.js(scala3Version))
 
 lazy val `workflows4s-web-ui-bundle` = (project in file("workflows4s-web-ui-bundle"))
   .settings(commonSettings)
-  .dependsOn(`workflows4s-web-api-shared`.jvm)
+  .dependsOn(`workflows4s-web-api-shared`.jvm(scala3Version))
   .settings(
-    name                := "workflows4s-web-ui-bundle",
+    name := "workflows4s-web-ui-bundle",
     libraryDependencies ++= Seq(
       "com.softwaremill.sttp.tapir" %% "tapir-files" % tapirVersion,
     ),
-    (Compile / compile) := ((Compile / compile) dependsOn (`workflows4s-web-ui` / Compile / fullLinkJS)).value,
-    Compile / resourceGenerators += Def.taskDyn {
-      val log      = streams.value.log
-      val cacheDir = streams.value.cacheDirectory / "webui-bundleit-cache"
+    // Def.uncached: sbt 2 would otherwise cache this task by its return value alone and could
+    // skip it without materializing the files; skipping is instead handled by FileFunction.cached,
+    // which also checks that the outputs exist.
+    Compile / resourceGenerators += Def.task(Def.uncached {
+      val log         = streams.value.log
+      val cacheDir    = streams.value.cacheDirectory / "webui-bundleit-cache"
+      val webUiDir    = (`workflows4s-web-ui` / baseDirectory).value
+      val jsOutputDir = (`workflows4s-web-ui` / Compile / fullLinkJSOutput).value
+      val outputDir   = (Compile / resourceManaged).value
 
-      val jsFileTask = (`workflows4s-web-ui` / Compile / fullLinkJSOutput).map(_ / "main.js")
+      // linked js + the frontend sources vite consumes directly
+      val inputs = Set(jsOutputDir / "main.js") ++
+        (webUiDir * ("*.html" || "*.js" || "*.mjs" || "*.css" || "*.json")).get() ++
+        (webUiDir / "public").allPaths.get()
 
-      jsFileTask.map { jsFile =>
-        val cached = FileFunction.cached(cacheDir, FilesInfo.hash) { _ =>
-          log.info("Bundling webui due to source change or missing output.")
-          BundleIt.bundle(
-            from = (`workflows4s-web-ui` / baseDirectory).value,
-            to = (Compile / resourceManaged).value,
-          )
-        }
-        cached(Set(jsFile)).toSeq
+      val cached = FileFunction.cached(cacheDir, FilesInfo.hash) { _ =>
+        log.info("Bundling webui due to source change or missing output.")
+        BundleIt.bundle(
+          from = webUiDir,
+          to = outputDir,
+          scalaJSOutputDir = jsOutputDir,
+        )
       }
-    },
+      cached(inputs).toSeq
+    }),
   )
 
 lazy val `workflows4s-example` = (project in file("workflows4s-example"))
@@ -240,7 +247,8 @@ lazy val `workflows4s-example` = (project in file("workflows4s-example"))
     `workflows4s-quartz`,
     `workflows4s-web-api-server`,
     `workflows4s-web-ui-bundle`,
-    `workflows4s-web-ui`,
+    // no dependency on `workflows4s-web-ui` itself: a JVM app cannot use Scala.js classes, and
+    // its sjs jars collide with the JVM ones when staged for Docker; the UI arrives via the bundle
   )
   .enablePlugins(JavaAppPackaging)
   .enablePlugins(DockerPlugin)
@@ -252,10 +260,13 @@ lazy val `workflows4s-example` = (project in file("workflows4s-example"))
     dockerBuildOptions ++= Seq("--platform=linux/amd64"),
     reStart / mainClass             := Some("workflows4s.example.api.Server"),
   )
-  .settings(Revolver.enableDebugging(port = 5050))
+  // fully qualified: the sbt-revolver fork auto-imports an ambiguous second `Revolver` object
+  .settings(spray.revolver.RevolverPlugin.autoImport.Revolver.enableDebugging(port = 5050))
+
+lazy val scala3Version = "3.8.4"
 
 lazy val commonSettings = Seq(
-  scalaVersion      := "3.8.4",
+  scalaVersion      := scala3Version,
   scalacOptions ++= Seq("-no-indent", "-Xmax-inlines", "64", "-explain-cyclic", "-Ydebug-cyclic"),
   libraryDependencies ++= Seq(
     "org.scalatest" %% "scalatest"       % "3.2.20" % Test,
