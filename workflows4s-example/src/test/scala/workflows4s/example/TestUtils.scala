@@ -15,12 +15,13 @@ import java.nio.file.{Files, Path, Paths}
 
 object TestUtils {
 
-  val basePath = Paths
-    .get(getClass.getResource("/").toURI) // workflows4s-example/target/scala-3.4.2/test-classes
-    .getParent                            // workflows4s-example/target/scala-3.4.2
-    .getParent                            // workflows4s-example/target
-    .getParent                            // workflows4s-example
-    .resolve("src/test/resources")
+  // resolved from the working directory (the build root, or the module dir when run from an IDE):
+  // classloader-based resolution stopped working under sbt 2, where test classes are packaged in jars
+  val basePath = {
+    val cwd       = Paths.get(sys.props("user.dir")).toAbsolutePath
+    val moduleDir = if cwd.getFileName.toString == "workflows4s-example" then cwd else cwd.resolve("workflows4s-example")
+    moduleDir.resolve("src/test/resources")
+  }
 
   val jsonPrinter                                           = Printer.spaces2
   def renderModelToFile(wio: WIO[?, ?, ?, ?], path: String) = {
